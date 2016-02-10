@@ -85,8 +85,8 @@ void usage(const char *prog) {
 
 void main(int ac, char **av) {
     int opt;
-    int arg_requests = 0;
-    int arg_seconds = 0;
+    int arg_requests = -1;
+    int arg_seconds = -1;
     int arg_concurrency = 1;
     while ((opt = getopt(ac, av, "n:t:c:")) != -1) {
         switch (opt) {
@@ -128,8 +128,8 @@ void main(int ac, char **av) {
         "GET %s HTTP/1.1\r\nUser-Agent: curl/7.35.0\r\nHost: %s\r\nAccept: */*\r\n\r\n",
         path, hostname);
     printf("Concurrency: %d\n", arg_concurrency);
-    printf("To %s:%d\n", ip, port);
-    printf("Req: %s\n", request);
+    printf("Server: %s:%d\n", ip, port);
+    printf("Request: %s", request);
     printf("===========\n");
 
     int poll = epoll_create(1);
@@ -169,7 +169,8 @@ void main(int ac, char **av) {
                 struct UserData * ud = ev->data.ptr;
                 if (read_all(ud)) {
                     close(ud->fd);
-                    users --;
+                    if (make_a_connection(&s_addr, poll) == -1)
+                        users --;
                 } else {
                     write(ud->fd, request, strlen(request));
                     nwrites ++;
