@@ -112,7 +112,7 @@ struct Args {
 
 void parse_args(struct Args *args, int ac, char **av) {
     int opt;
-    while ((opt = getopt(ac, av, "n:t:c:")) != -1) {
+    while ((opt = getopt(ac, av, "n:t:c:T:p:")) != -1) {
         switch (opt) {
         case 'n':
             args->requests = atoi(optarg);
@@ -138,6 +138,12 @@ void parse_args(struct Args *args, int ac, char **av) {
                 usage(av[0]);
             }
             break;
+        case 'T':
+            args->content_type = optarg;
+            break;
+        case 'p':
+            args->post_file = optarg;
+            break;
         default:
             usage(av[0]);
         }
@@ -149,11 +155,9 @@ void parse_args(struct Args *args, int ac, char **av) {
     args->path = av[optind+2];
 }
 
-void main(int ac, char **av) {
-    struct Args args = {NULL, -1, NULL, 1, -1, 1, NULL, NULL};
-    parse_args(&args, ac, av);
 
-    struct hostent *he = gethostbyname(args.hostname);
+void make_request(struct Args *args, struct sockaddr_in * paddr, char *request, int sz) {
+    struct hostent *he = gethostbyname(args->hostname);
     if (he == NULL) {
         perror("gethostbyname failed");
         exit(1);
@@ -166,14 +170,45 @@ void main(int ac, char **av) {
         break;
     }
     char hostport[64];
-    if (args.port == 80)
-        strcpy(hostport, args.hostname);
+    if (args->port == 80)
+        strcpy(hostport, args->hostname);
     else
-        sprintf(hostport, "%s:%d", args.hostname, args.port);
-    char request[1024];
+        sprintf(hostport, "%s:%d", args->hostname, args->port);
+
+    char method[8] = "GET";
+    if (args->post_file)
+        strcpy(method, "POST");
+
+    memset(request, 0, sz);
     sprintf(request,
-        "GET %s HTTP/1.1\r\nUser-Agent: curl/7.35.0\r\nHost: %s\r\nAccept: */*\r\n\r\n",
-        args.path, hostport);
+        "%s %s HTTP/1.1\r\nUser-Agent: curl/7.35.0\r\nHost: %s\r\nAccept: */*\r\n",
+        method, args->path, hostport);
+    if (args->post_file == NULL) {
+        strcat(request, "\r\n");
+    } else {
+        sprintf(request + strlen(request),
+            "Content-Type: %s\r\n\r\n",
+            args->content_type);
+        int fd = open(args->post_file, O_RDONLY);
+        read(fd, request + strlen(request), sz - strlen(request) - 1);
+        close(fd);
+    }
+
+    memset(paddr, 0, sizeof(struct sockaddr_in));
+    paddr->sin_family = AF_INET;
+    paddr->sin_port = htons(args->port);
+    inet_pton(AF_INET, ip, &(paddr->sin_addr));
+}
+
+
+void main(int ac, char **av) {
+    struct Args args = {NULL, -1, NULL, 1, -1, 1, "text/plain", NULL};
+    parse_args(&args, ac, av);
+
+    char request[1024];
+    struct sockaddr_in s_addr;
+    make_request(&args, &s_addr, request, sizeof(request));
+
     printf("Concurrency level: %d\n", args.concurrency);
     printf("Request: %s", request);
     printf("===========\n");
@@ -184,12 +219,7 @@ void main(int ac, char **av) {
         exit(1);
     }
 
-    struct sockaddr_in s_addr;
-    memset(&s_addr, 0, sizeof(s_addr));
-    s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons(args.port);
-    inet_pton(AF_INET, ip, &s_addr.sin_addr);
-
+    int i;
     int users = 0;
     for (i = 0; i < args.concurrency; ++i) {
         if (make_a_connection(&s_addr, poll) != -1) {
