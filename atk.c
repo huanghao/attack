@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <time.h>
+#include <signal.h>
 
 
 struct UserData {
@@ -86,6 +87,13 @@ void usage(const char *prog) {
         "   -T content-type\n"
         , prog);
     exit(1);
+}
+
+
+int running = 1;
+
+void stop_loop(int sig) {
+    running = 0;
 }
 
 
@@ -181,11 +189,13 @@ void main(int ac, char **av) {
     int size = 64;
     struct epoll_event events[size];
 
+    signal(SIGINT, stop_loop);
+
     struct timeval tvstart, tvnow;
     gettimeofday(&tvstart, NULL);
     long starttime = tvstart.tv_sec * 1000000 + tvstart.tv_usec, now;
 
-    while (users > 0 &&
+    while (users > 0 && running &&
            (arg_requests == -1 || nwrites < arg_requests)) {
         int n = epoll_wait(poll, events, size, arg_timelimit);
 
