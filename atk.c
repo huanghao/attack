@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <time.h>
 
 
 struct UserData {
@@ -85,19 +86,33 @@ void usage(const char *prog) {
 
 void main(int ac, char **av) {
     int opt;
-    int arg_requests = -1;
+    int arg_requests = 1;
     int arg_seconds = -1;
     int arg_concurrency = 1;
     while ((opt = getopt(ac, av, "n:t:c:")) != -1) {
         switch (opt) {
         case 'n':
             arg_requests = atoi(optarg);
+            if (arg_requests < 1) {
+                fprintf(stderr, "-n must > 0\n");
+                usage(av[0]);
+            }
+            arg_seconds = -1;
             break;
         case 't':
             arg_seconds = atoi(optarg);
+            if (arg_seconds < 1) {
+                fprintf(stderr, "-t must > 0\n");
+                usage(av[0]);
+            }
+            arg_requests = -1;
             break;
         case 'c':
             arg_concurrency = atoi(optarg);
+            if (arg_concurrency < 1) {
+                fprintf(stderr, "-c must > 0\n");
+                usage(av[0]);
+            }
             break;
         default:
             usage(av[0]);
@@ -123,12 +138,16 @@ void main(int ac, char **av) {
         strcpy(ip, inet_ntoa(*addr_list[i]));
         break;
     }
-    static char request[255];
+    char hostport[64];
+    if (port == 80)
+        strcpy(hostport, hostname);
+    else
+        sprintf(hostport, "%s:%d", hostname, port);
+    char request[1024];
     sprintf(request,
         "GET %s HTTP/1.1\r\nUser-Agent: curl/7.35.0\r\nHost: %s\r\nAccept: */*\r\n\r\n",
-        path, hostname);
-    printf("Concurrency: %d\n", arg_concurrency);
-    printf("Server: %s:%d\n", ip, port);
+        path, hostport);
+    printf("Concurrency level: %d\n", arg_concurrency);
     printf("Request: %s", request);
     printf("===========\n");
 
@@ -155,8 +174,19 @@ void main(int ac, char **av) {
     int nwrites = 0;
     int size = 64;
     struct epoll_event events[size];
-    while (users > 0) {
-        int n = epoll_wait(poll, events, size, -1);
+
+    time_t start, now;
+    time(&start);
+
+    while (users > 0 &&
+           (arg_requests == -1 || nwrites < arg_requests)) {
+        int n = epoll_wait(poll, events, size, arg_seconds);
+
+        if (arg_seconds != -1) {
+            time(&now);
+            if ((now - start) >= arg_seconds)
+                break;
+        }
 
         if (n == -1) {
             perror("epoll wait failed");
@@ -187,5 +217,10 @@ void main(int ac, char **av) {
             }
         }
     }
-    printf("done\n");
+    time(&now);
+    printf("Took %ld seconds to send %d requests\n", now - start, nwrites);
 }
+
+// TODO
+// parse http response
+// simple statistics

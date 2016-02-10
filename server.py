@@ -3,7 +3,6 @@ import tornado.web
 
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
-        print 'GET'
         self.write("Hello, world")
 
 def make_app():
@@ -12,6 +11,12 @@ def make_app():
     ])
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1:
+        port = int(sys.argv[1])
+    else:
+        port = 9999
     app = make_app()
-    app.listen(9999)
+    app.listen(port)
+    print 'Listen on', port
     tornado.ioloop.IOLoop.current().start()
