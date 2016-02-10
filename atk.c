@@ -96,34 +96,44 @@ void stop_loop(int sig) {
     running = 0;
 }
 
+struct Args {
+    // arguments
+    char *hostname;
+    short port;
+    char *path;
 
-void main(int ac, char **av) {
+    // options
+    int requests;
+    int timelimit;
+    int concurrency;
+    char *content_type;
+    char *post_file;
+};
+
+void parse_args(struct Args *args, int ac, char **av) {
     int opt;
-    int arg_requests = 1;
-    int arg_timelimit = -1;
-    int arg_concurrency = 1;
     while ((opt = getopt(ac, av, "n:t:c:")) != -1) {
         switch (opt) {
         case 'n':
-            arg_requests = atoi(optarg);
-            if (arg_requests < 1) {
+            args->requests = atoi(optarg);
+            if (args->requests < 1) {
                 fprintf(stderr, "-n must > 0\n");
                 usage(av[0]);
             }
-            arg_timelimit = -1;
+            args->timelimit = -1;
             break;
         case 't':
-            arg_timelimit = atoi(optarg);
-            if (arg_timelimit < 1) {
+            args->timelimit = atoi(optarg);
+            if (args->timelimit < 1) {
                 fprintf(stderr, "-t must > 0\n");
                 usage(av[0]);
             }
-            arg_timelimit *= 1000000;
-            arg_requests = -1;
+            args->timelimit *= 1000000;
+            args->requests = -1;
             break;
         case 'c':
-            arg_concurrency = atoi(optarg);
-            if (arg_concurrency < 1) {
+            args->concurrency = atoi(optarg);
+            if (args->concurrency < 1) {
                 fprintf(stderr, "-c must > 0\n");
                 usage(av[0]);
             }
@@ -134,13 +144,16 @@ void main(int ac, char **av) {
     }
     if (optind >= ac)
         usage(av[0]);
-    char *hostname = av[optind];
-    short port = atoi(av[optind+1]);
-    char *path = av[optind+2];
+    args->hostname = av[optind];
+    args->port = atoi(av[optind+1]);
+    args->path = av[optind+2];
+}
 
-    // Main
+void main(int ac, char **av) {
+    struct Args args = {NULL, -1, NULL, 1, -1, 1, NULL, NULL};
+    parse_args(&args, ac, av);
 
-    struct hostent *he = gethostbyname(hostname);
+    struct hostent *he = gethostbyname(args.hostname);
     if (he == NULL) {
         perror("gethostbyname failed");
         exit(1);
@@ -153,15 +166,15 @@ void main(int ac, char **av) {
         break;
     }
     char hostport[64];
-    if (port == 80)
-        strcpy(hostport, hostname);
+    if (args.port == 80)
+        strcpy(hostport, args.hostname);
     else
-        sprintf(hostport, "%s:%d", hostname, port);
+        sprintf(hostport, "%s:%d", args.hostname, args.port);
     char request[1024];
     sprintf(request,
         "GET %s HTTP/1.1\r\nUser-Agent: curl/7.35.0\r\nHost: %s\r\nAccept: */*\r\n\r\n",
-        path, hostport);
-    printf("Concurrency level: %d\n", arg_concurrency);
+        args.path, hostport);
+    printf("Concurrency level: %d\n", args.concurrency);
     printf("Request: %s", request);
     printf("===========\n");
 
@@ -174,11 +187,11 @@ void main(int ac, char **av) {
     struct sockaddr_in s_addr;
     memset(&s_addr, 0, sizeof(s_addr));
     s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons(port);
+    s_addr.sin_port = htons(args.port);
     inet_pton(AF_INET, ip, &s_addr.sin_addr);
 
     int users = 0;
-    for (i = 0; i < arg_concurrency; ++i) {
+    for (i = 0; i < args.concurrency; ++i) {
         if (make_a_connection(&s_addr, poll) != -1) {
             users ++;
         }
@@ -196,13 +209,13 @@ void main(int ac, char **av) {
     long starttime = tvstart.tv_sec * 1000000 + tvstart.tv_usec, now;
 
     while (users > 0 && running &&
-           (arg_requests == -1 || nwrites < arg_requests)) {
-        int n = epoll_wait(poll, events, size, arg_timelimit);
+           (args.requests == -1 || nwrites < args.requests)) {
+        int n = epoll_wait(poll, events, size, args.timelimit);
 
-        if (arg_timelimit != -1) {
+        if (args.timelimit != -1) {
             gettimeofday(&tvnow, NULL);
             now = tvnow.tv_sec * 1000000 + tvnow.tv_usec;
-            if ((now - starttime) >= arg_timelimit)
+            if ((now - starttime) >= args.timelimit)
                 break;
         }
 
