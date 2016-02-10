@@ -78,8 +78,13 @@ int read_all(struct UserData * ud) {
 
 void usage(const char *prog) {
     fprintf(stderr,
-        "Usage: %s [-n requests] [-t seconds] [-c concurrency] host port path\n",
-        prog);
+        "Usage: %s [options] host port path\n"
+        "   -n requests\n"
+        "   -t timelimit\n"
+        "   -c concurrency\n"
+        "   -p POST-file\n"
+        "   -T content-type\n"
+        , prog);
     exit(1);
 }
 
@@ -87,7 +92,7 @@ void usage(const char *prog) {
 void main(int ac, char **av) {
     int opt;
     int arg_requests = 1;
-    int arg_seconds = -1;
+    int arg_timelimit = -1;
     int arg_concurrency = 1;
     while ((opt = getopt(ac, av, "n:t:c:")) != -1) {
         switch (opt) {
@@ -97,14 +102,15 @@ void main(int ac, char **av) {
                 fprintf(stderr, "-n must > 0\n");
                 usage(av[0]);
             }
-            arg_seconds = -1;
+            arg_timelimit = -1;
             break;
         case 't':
-            arg_seconds = atoi(optarg);
-            if (arg_seconds < 1) {
+            arg_timelimit = atoi(optarg);
+            if (arg_timelimit < 1) {
                 fprintf(stderr, "-t must > 0\n");
                 usage(av[0]);
             }
+            arg_timelimit *= 1000000;
             arg_requests = -1;
             break;
         case 'c':
@@ -175,16 +181,18 @@ void main(int ac, char **av) {
     int size = 64;
     struct epoll_event events[size];
 
-    time_t start, now;
-    time(&start);
+    struct timeval tvstart, tvnow;
+    gettimeofday(&tvstart, NULL);
+    long starttime = tvstart.tv_sec * 1000000 + tvstart.tv_usec, now;
 
     while (users > 0 &&
            (arg_requests == -1 || nwrites < arg_requests)) {
-        int n = epoll_wait(poll, events, size, arg_seconds);
+        int n = epoll_wait(poll, events, size, arg_timelimit);
 
-        if (arg_seconds != -1) {
-            time(&now);
-            if ((now - start) >= arg_seconds)
+        if (arg_timelimit != -1) {
+            gettimeofday(&tvnow, NULL);
+            now = tvnow.tv_sec * 1000000 + tvnow.tv_usec;
+            if ((now - starttime) >= arg_timelimit)
                 break;
         }
 
@@ -217,8 +225,10 @@ void main(int ac, char **av) {
             }
         }
     }
-    time(&now);
-    printf("Took %ld seconds to send %d requests\n", now - start, nwrites);
+    gettimeofday(&tvnow, NULL);
+    now = tvnow.tv_sec * 1000000 + tvnow.tv_usec;
+    double took = (double)(now - starttime) / 1000000;
+    printf("Took %f seconds to send %d requests\n", took, nwrites);
 }
 
 // TODO
