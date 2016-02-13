@@ -26,9 +26,25 @@ def free_port():
     return p
 
 
+def wait_port(port, t=1):
+    while 1:
+        s = socket.socket()
+        try:
+            r = s.connect_ex(('127.0.0.1', port))
+        finally:
+            s.close()
+        if r == 0:
+            return
+        sys.stdout.write('.')
+        sys.stdout.flush()
+        time.sleep(t)
+
+
 def run_server(args, aport, bport):
-    cmd = ['appium', '-p', aport, '-U', args.uid, '-bp', bport, '--log-level', 'warn']
+    cmd = ['appium', '-p', str(aport), '-bp', str(bport),
+           '-U', args.uid, '--log-level', 'warn']
     proc = subprocess.Popen(cmd)
+    print 'server', aport, 'started at pid', proc.pid
     return proc
 
 
@@ -90,8 +106,10 @@ def main():
     bport = free_port()
 
     proc = run_server(args, aport, bport)
-    raw_input('press any key to continue')
     try:
+        wait_port(aport)
+        time.sleep(3)
+        #raw_input('press any key to continue')
         run_client(args, aport, args.url)
     finally:
         print 'try to kill server', aport
