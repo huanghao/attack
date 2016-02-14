@@ -5,7 +5,6 @@ import socket
 import argparse
 import subprocess
 
-import psutil
 from appium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 
@@ -58,7 +57,6 @@ def run_client(args, aport, url):
         'autoLaunch': 'true',
         'appPackage': 'com.tencent.movieticket',
         'appActivity': 'com.tencent.movieticket.activity.QQMovieTicketActivity',
-        #'deviceReadyTimeout': 10,
     }
     driver = webdriver.Remote(driver_url, caps)
 
@@ -113,12 +111,8 @@ def main():
         run_client(args, aport, args.url)
     finally:
         print 'try to kill server', aport
-        p = psutil.Process(proc.pid)
-        for c in p.children(recursive=True):
-            c.kill()
-            print c.pid, 'was killed'
-        p.kill()
-        print p.pid, 'was killed'
+        proc.kill()
+        print proc.pid, 'was killed'
 
 
 if __name__ == '__main__':
