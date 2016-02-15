@@ -40,12 +40,32 @@ def wait_port(port, t=1):
 
 
 def run_server(args, aport, bport):
-    cmd = ['appium', '-p', str(aport), '-bp', str(bport),
-           #'-U', args.uid,
+    cmd = ['appium', '--udid', args.uid,
+           '-p', str(aport), '-bp', str(bport),
            '--log-level', 'warn']
     proc = subprocess.Popen(cmd)
     print 'server', aport, 'started at pid', proc.pid
     return proc
+
+
+def echo(ch):
+    sys.stdout.write(ch)
+    sys.stdout.flush()
+
+
+def safe_click(el):
+    """
+     0: not exist
+     1: click ok
+    -1: error
+    """
+    if not el:
+        return 0
+    try:
+        el.click()
+    except NoSuchElementException:
+        return -1
+    return 1
 
 
 def run_client(args, aport, url):
@@ -55,7 +75,7 @@ def run_client(args, aport, url):
         'platformVersion': args.version,
         'deviceName': args.uid,
         'udid': args.uid,
-        'autoLaunch': 'true',
+        'autoLaunch': True,
         'appPackage': 'com.tencent.movieticket',
         'appActivity': 'com.tencent.movieticket.activity.QQMovieTicketActivity',
     }
@@ -78,31 +98,46 @@ def run_client(args, aport, url):
         except NoSuchElementException:
             return
 
+    def click_back():
+        # http://developer.android.com/reference/android/view/KeyEvent.html
+        driver.press_keycode(4)  # KEYCODE_BACK
+
+    error1 = 'new UiSelector().text("本次交易不支持使用零钱")'
+    error2 = 'new UiSelector().textContains("稍后再试")'  # 系统繁忙，请稍后再试
+    error3 = 'new UiSelector().text("卡号")'
+    error4 = 'new UiSelector().textContains("是否要放弃本次交易")'
+    confirm = 'new UiSelector().text("确定")'
+    yes = 'new UiSelector().text("是")'
+
+    def handle_errors():
+        if find(error1) or find(error3):
+            click_back()
+            echo('B')
+            time.sleep(1)
+        elif find(error2):
+            el = find(confirm)
+            if safe_click(el) == 1:
+                echo('S')
+                time.sleep(10)
+        elif find(error4):
+            el = find(yes)
+            if safe_click(el) == 1:
+                echo('A')
+                time.sleep(1)
+
     buttons = [
         'new UiSelector().enabled(true).text("支付")',
         'new UiSelector().enabled(true).textContains("零钱支付")',
         'new UiSelector().textContains("完成")',
         ]
-    error1 = 'new UiSelector().text("本次交易不支持使用零钱")'
     try:
         while 1:
             for btn in buttons:
                 time.sleep(.1)
                 el = find(btn)
-                if not el:
-                    continue
-                try:
-                    el.click()
-                except NoSuchElementException:
-                    continue
-                sys.stdout.write('.')
-                sys.stdout.flush()
-            if find(error1):
-                # http://developer.android.com/reference/android/view/KeyEvent.html
-                driver.press_keycode(4)  # KEYCODE_BACK
-                sys.stdout.write('B')
-                sys.stdout.flush()
-                time.sleep(.1)
+                if safe_click(el) == 1:
+                    echo('.')
+            handle_errors()
     finally:
         driver.quit()
 
