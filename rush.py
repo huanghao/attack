@@ -91,7 +91,10 @@ def run_client(args, aport, url):
                 el = find(btn)
                 if not el:
                     continue
-                el.click()
+                try:
+                    el.click()
+                except NoSuchElementException:
+                    continue
                 sys.stdout.write('.')
                 sys.stdout.flush()
             if find(error1):
