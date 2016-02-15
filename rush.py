@@ -41,7 +41,8 @@ def wait_port(port, t=1):
 
 def run_server(args, aport, bport):
     cmd = ['appium', '-p', str(aport), '-bp', str(bport),
-           '-U', args.uid, '--log-level', 'warn']
+           #'-U', args.uid,
+           '--log-level', 'warn']
     proc = subprocess.Popen(cmd)
     print 'server', aport, 'started at pid', proc.pid
     return proc
@@ -78,7 +79,8 @@ def run_client(args, aport, url):
             return
 
     buttons = [
-        "//android.widget.Button[contains(@text, '支付') and @enabled='true']",
+        "//android.widget.Button[@text='支付' and @enabled='true']",
+        "//android.widget.Button[contains(@text, '零钱支付') and @enabled='true']",
         "//android.widget.TextView[contains(@text, '完成')]",
         ]
     i = 0
@@ -106,8 +108,7 @@ def main():
     proc = run_server(args, aport, bport)
     try:
         wait_port(aport)
-        time.sleep(3)
-        #raw_input('press any key to continue')
+        time.sleep(5)
         run_client(args, aport, args.url)
     finally:
         print 'try to kill server', aport
