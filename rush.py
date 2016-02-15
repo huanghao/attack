@@ -72,18 +72,18 @@ def run_client(args, aport, url):
     print url
     el.set_text(url)
 
-    def find(xpath):
+    def find(selector):
         try:
-            return driver.find_element_by_xpath(xpath)
+            return driver.find_element_by_android_uiautomator(selector)
         except NoSuchElementException:
             return
 
     buttons = [
-        "//android.widget.Button[@text='支付' and @enabled='true']",
-        "//android.widget.Button[contains(@text, '零钱支付') and @enabled='true']",
-        "//android.widget.TextView[contains(@text, '完成')]",
+        'new UiSelector().enabled(true).text("支付")',
+        'new UiSelector().enabled(true).textContains("零钱支付")',
+        'new UiSelector().textContains("完成")',
         ]
-    i = 0
+    error1 = 'new UiSelector().text("本次交易不支持使用零钱")'
     try:
         while 1:
             for btn in buttons:
@@ -92,10 +92,14 @@ def run_client(args, aport, url):
                 if not el:
                     continue
                 el.click()
-                i += 1
-                if i % 3 == 0:
-                    sys.stdout.write('.')
-                    sys.stdout.flush()
+                sys.stdout.write('.')
+                sys.stdout.flush()
+            if find(error1):
+                # http://developer.android.com/reference/android/view/KeyEvent.html
+                driver.press_keycode(4)  # KEYCODE_BACK
+                sys.stdout.write('B')
+                sys.stdout.flush()
+                time.sleep(.1)
     finally:
         driver.quit()
 
